@@ -129,9 +129,25 @@ not assumed — the "Verified" column records what a real fresh conversation rec
 | # | Layer | Mechanism | Verified reaching a fresh conversation? |
 |---|-------|-----------|------------------------------------------|
 | 1 | **Account memory** | OpenHands account memory (settings → Memory), injected as a `<MEMORY_CONTEXT>` block | **Yes.** Verified in a brand-new cloud sandbox and in a GUI-launched session. |
-| 2 | **Project `AGENTS.md`** | Repo-root `AGENTS.md`, injected as a context block | **Yes.** Verified: root `AGENTS.md` content appeared in a new conversation's context. |
-| 3 | **Project skills** | `.agents/skills/<name>.md` (flat file) in the repo | **Yes.** Verified. (Directory form `.agents/skills/<name>/SKILL.md` was discovered but did not reach the prompt — prefer the flat file.) |
+| 2 | **Project `AGENTS.md`** | Repo-root `AGENTS.md`, injected as a context block | **Yes — when `load_project_skills` is on.** Verified: with the flag true, the repo's `AGENTS.md` appeared as an `agents` block in a new conversation; with it off, nothing was injected. |
+| 3 | **Project skills** | `.agents/skills/<name>.md` (flat file) in the repo | **Yes — same flag.** Verified: appeared as a `<name>` block. (Directory form `.agents/skills/<name>/SKILL.md` was discovered but did not reach the prompt — prefer the flat file.) |
 | 4 | **Account skill** | A custom skill in the account agent context | **No — in this deployment.** Verified negative: a custom account skill stored in `agent_settings.agent_context.skills` was **not** merged into a GUI-launched session or a freshly API-launched cloud conversation. Public catalogue skills *are* loaded automatically; custom account skills are not. |
+
+### Turn the flags on (one-time)
+
+Layers 2 and 3 only inject when the account enables project skills. The public settings API *does*
+persist these flags (verified readback), so this is scriptable — `sync-design-standard.py` sets
+them:
+
+```
+POST https://app.all-hands.dev/api/v1/settings
+Authorization: Bearer $OPENHANDS_API_KEY
+{"agent_settings_diff": {"agent_context": {"load_project_skills": true,
+                                           "load_user_skills": true,
+                                           "load_memory": true}}}
+```
+
+Verify with `GET /api/v1/settings` → `agent_settings.agent_context.load_project_skills == true`.
 
 ### What this means in practice
 
