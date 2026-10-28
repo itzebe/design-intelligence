@@ -27,19 +27,24 @@ Measured against real fresh conversations in this OpenHands deployment:
 | Layer | Reaches a new conversation? |
 |-------|------------------------------|
 | **Account memory** (`<MEMORY_CONTEXT>` block) | **Yes** — every project, every conversation. |
-| Project root `AGENTS.md` | **Yes** — within that project. |
-| Project skill `.agents/skills/<name>.md` (flat file) | **Yes** — within that project. |
+| Project root `AGENTS.md` | **Yes** — within that project, once `load_project_skills` is on. |
+| Project skill `.agents/skills/<name>.md` (flat file) | **Yes** — same flag. |
 | Custom account **skill** | **No** — stored durably, but not auto-injected here. Kept as a fallback. |
 
 So the two working channels are **account memory** (global) and a project's **`AGENTS.md`**
-(per-project). The canonical repository is the source of truth both point to.
+(per-project, gated by `load_project_skills`). The canonical repository is the source of truth both
+point to.
 
 ## One-time setup (2 minutes, from your phone)
 
 1. **Paste the account memory block.** Open OpenHands → **Settings → Memory**, and paste the
    contents of the code block in `ACCOUNT_MEMORY.md`. This is the step that makes the standard
    apply account-wide. (The settings API cannot persist memory, so it must be done in the UI.)
-2. **Give each project the project layer.** Copy `templates/AGENTS.md` into the project root as
+2. **Turn on project skills.** So the per-project layer is actually read, run
+   `python3 scripts/sync-design-standard.py` (or set it in Settings). It enables
+   `load_project_skills`, which is what makes a repo's `AGENTS.md` and `.agents/skills/` reach the
+   agent. Verify with `--check`.
+3. **Give each project the project layer.** Copy `templates/AGENTS.md` into the project root as
    `AGENTS.md` and fill in the placeholders. This enforces the standard in that repo.
 
 That's it. New conversations then inherit the standard automatically.
