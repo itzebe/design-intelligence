@@ -1,64 +1,73 @@
 # Global Design Intelligence — account memory block
 
-Paste the block below into **OpenHands → Settings → Memory** (the account memory editor). It is
-the one channel verified to reach **every new conversation, in every project**. Keep it short; it
-points to the full standard rather than duplicating it.
+This is the block that carries the standard into **every new conversation, in every project**.
 
-This is a **manual** step: the public settings API returns HTTP 200 for `memory_context` but does
-not persist it, so no script can do it for you. Do it once.
+## How account memory actually works (verified, 2026-10-29)
+
+There is **no "Memory" text box in the OpenHands settings UI** — the Memory section contains a
+single toggle ("Persistent memory" = `load_memory`). Do not look for a paste target there.
+
+Account memory is the **user memory file**, `~/.openhands/memory/MEMORY.md`. Its content is
+injected into each new conversation as the `<MEMORY_CONTEXT>` block. It is populated from disk, so
+the way to set it is to put the text in that file:
+
+1. Append the block below to the **end** of `~/.openhands/memory/MEMORY.md`.
+2. In a conversation whose workspace is available, edit that file with the **`file_editor` tool**
+   (not `bash`). A `MemoryChangeCallbackProcessor` detects `MEMORY.md` writes made via
+   `file_editor` and persists the new content to your account record. A plain shell `cp`/`echo`
+   does **not** trigger it.
+
+The public settings API accepts a `memory_context` field with HTTP 200 but **silently ignores it**
+— verified: the value is unchanged after the POST. `POST /api/v1/settings` persists the
+`load_memory` flag and skills, not the memory text.
+
+### The truncation rule — put this block LAST
+
+The SDK's own memory instructions say: *"Keep the indexes concise (aim under ~6000 characters
+combined; **older top content is truncated first**)."* Measured: only roughly the **last ~100 lines
+(~3000 characters)** of each tier survive into the prompt. Content near the top of `MEMORY.md` is
+dropped. **Therefore the GDI block must be at the very end of the file**, after all other notes.
+Putting it first — the intuitive choice — makes it invisible.
+
+Keep the block short; it points to the full standard rather than duplicating it. One block, set
+once, then it follows you into every project.
 
 ---
 
-## The block to paste
+## The block (append this to the END of `~/.openhands/memory/MEMORY.md`)
 
 ```markdown
-## Global Design Intelligence (applies to ALL UI work, every project, every conversation)
-
-Standing, mandatory standard for any user interface you produce, modify, or review — a full
-redesign and a one-line CSS tweak alike. Full text: `DESIGN_CONSTITUTION.md` in the canonical
-design-intelligence repository; companions `DESIGN_TOOLKIT.md`, `VISUAL_QA_CHECKLIST.md`,
-`templates/`. If a project has its own copy of the constitution, read that instead.
-
-Non-negotiable core (the constitution governs where it is stricter):
-
-1. Generic is a failure state. If the result could be a default template with the logo swapped,
-   rework it before reporting done.
-2. Before writing UI code, state briefly: the three most important design weaknesses (or what the
-   product is and who uses it), and the visual direction — typography, spacing rhythm, single
-   accent, and the one thing this interface should be remembered for.
-3. Product-first: every decision traces to a user need or product goal; make each screen's primary
-   task the most obvious thing on it; prefer the smallest interface that does the job. Do not give
-   a finance tool, a travel app, a dev tool, and a storefront the same treatment.
-4. Anti-slop — banned unless the project's existing identity already uses them or you justify the
-   choice: purple/indigo/violet or blue-to-pink gradients, rainbow/aurora meshes, decorative
-   glassmorphism and frosted blur, glowing borders and neon halos, decorative blobs/orbs, emoji as
-   icons or bullets, the same rounded-2xl+shadow-xl+p-6 on every element, the centred-hero →
-   three-identical-cards → CTA template, every section the same height/weight, animation
-   everywhere, fabricated metrics/testimonials/logos, low-contrast gray-on-gray body text.
-5. Typography and composition: a real type scale; body measure ~45–75 characters; at most two or
-   three typefaces with clear roles; hierarchy legible from size/weight/spacing/position alone; one
-   spacing rhythm; one meaningful accent with neutrals doing structural work.
-6. Interaction: define default, hover, focus-visible, active, disabled, loading, empty, error,
-   success, and content-extreme states. Visible focus rings are never removed. Respect
-   `prefers-reduced-motion`.
-7. Responsive: verify at mobile, tablet, and desktop. Reflow, don't shrink. Usable at 320px and
-   400% zoom. Touch targets ≥44×44 CSS px.
-8. Accessibility: WCAG 2.2 AA is the minimum — text contrast ≥4.5:1 (≥3:1 large), non-text ≥3:1,
-   full keyboard operability, labels tied to inputs, semantic HTML, correct heading order. Verify,
-   don't assume.
-9. Preserve each project's own visual identity. This standard sets the quality bar, not a shared
-   house style. Do not force every app to look alike.
-10. Verify honestly: actually open the rendered interface in a browser, look at it, take a
-    screenshot, check mobile and desktop. If you could not verify something, say so plainly. Never
-    claim a check you did not run; never fabricate content; run the relevant tests and report the
-    result.
-11. Stay in scope; do not add dependencies without justification; do not break working features to
-    add tooling; never store credentials or tokens in design docs.
+## Global Design Intelligence (GDI) - mandatory for ALL UI work, every project
+Source of truth: https://github.com/itzebe/design-intelligence — read DESIGN_CONSTITUTION.md there
+(companions: DESIGN_TOOLKIT.md, VISUAL_QA_CHECKLIST.md, templates/). If unreachable, apply this core:
+- Generic is a failure state. If the result could be a default template with the logo swapped,
+  rework it before reporting done.
+- Before writing UI code, state the visual direction: type scale, spacing rhythm, one accent, and
+  the one thing this interface should be remembered for. Product-first; smallest interface that
+  does the job. Do not give a finance tool, a travel app, and a storefront the same treatment.
+- Banned unless the project already uses them: purple/indigo/blue-pink gradients, glassmorphism,
+  glow/neon, decorative blobs, emoji as icons, uniform rounded-2xl+shadow-xl cards,
+  hero -> three identical cards -> CTA, low-contrast gray-on-gray body text.
+- Define every state: default, hover, focus-visible, active, disabled, loading, empty, error,
+  success. Never remove focus rings. Respect prefers-reduced-motion.
+- Responsive: verify mobile, tablet, desktop. Reflow, do not shrink. Usable at 320px and 400% zoom.
+  Touch targets >= 44x44 CSS px.
+- Accessibility: WCAG 2.2 AA is the minimum - text contrast >= 4.5:1 (>= 3:1 large), non-text
+  >= 3:1, full keyboard operability, labels tied to inputs, correct heading order.
+- Preserve each project's own visual identity. This sets the quality bar, not a shared house style.
+- Verify honestly: open the rendered UI in a real browser, screenshot it, check mobile and desktop,
+  run the relevant tests, and say plainly what you could not verify. Never fabricate content.
 ```
+
+This is deliberately shorter than the constitution. The full non-negotiable core lives in
+`DESIGN_CONSTITUTION.md`; the memory block only has to be enough to make an agent stop, load the
+constitution, and apply it. Keeping it under ~1800 characters means it fits inside the truncation
+window even when other notes sit above it.
 
 ---
 
 ## Keeping it current
 
-When `DESIGN_CONSTITUTION.md` changes, re-paste this block if the change touches the core. The
-block is intentionally a summary; the repository is the source of truth.
+When `DESIGN_CONSTITUTION.md` changes, update this block if the change touches the core, then
+re-apply it to `~/.openhands/memory/MEMORY.md` with `file_editor`. The block is a summary; the
+repository is the source of truth.

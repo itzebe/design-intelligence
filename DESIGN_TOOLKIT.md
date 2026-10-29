@@ -128,10 +128,14 @@ not assumed — the "Verified" column records what a real fresh conversation rec
 
 | # | Layer | Mechanism | Verified reaching a fresh conversation? |
 |---|-------|-----------|------------------------------------------|
-| 1 | **Account memory** | OpenHands account memory (settings → Memory), injected as a `<MEMORY_CONTEXT>` block | **Yes.** Verified in a brand-new cloud sandbox and in a GUI-launched session. |
+| 1 | **User memory file** | `~/.openhands/memory/MEMORY.md`, injected as the `<MEMORY_CONTEXT>` block | **Yes.** Verified in a fresh local conversation. **Caveat:** only the last ~100 lines (~3000 chars) of each tier are injected — older top content is dropped — so the block must be at the **end** of the file. |
 | 2 | **Project `AGENTS.md`** | Repo-root `AGENTS.md`, injected as a context block | **Yes — when `load_project_skills` is on.** Verified: with the flag true, the repo's `AGENTS.md` appeared as an `agents` block in a new conversation; with it off, nothing was injected. |
 | 3 | **Project skills** | `.agents/skills/<name>.md` (flat file) in the repo | **Yes — same flag.** Verified: appeared as a `<name>` block. (Directory form `.agents/skills/<name>/SKILL.md` was discovered but did not reach the prompt — prefer the flat file.) |
 | 4 | **Account skill** | A custom skill in the account agent context | **No — in this deployment.** Verified negative: a custom account skill stored in `agent_settings.agent_context.skills` was **not** merged into a GUI-launched session or a freshly API-launched cloud conversation. Public catalogue skills *are* loaded automatically; custom account skills are not. |
+
+The `system_message_suffix` account setting is a fifth candidate: it **persists** through the
+settings API (verified readback) but was **not** injected into any prompt in testing, so it is not
+a usable channel here.
 
 ### Turn the flags on (one-time)
 
@@ -151,10 +155,11 @@ Verify with `GET /api/v1/settings` → `agent_settings.agent_context.load_projec
 
 ### What this means in practice
 
-- **The durable, cross-project channel is account memory (layer 1).** Because a custom account
-  skill is not auto-injected here, put the *core* of the standard (the gate, the anti-slop list,
-  accessibility minimum, verification rule, and a pointer to the full text) into account memory.
-  That is what every new conversation, in every project, will actually receive.
+- **The durable, cross-project channel is the user memory file (layer 1).** Because a custom
+  account skill is not auto-injected here, put the *core* of the standard (the gate, the anti-slop
+  list, accessibility minimum, verification rule, and a pointer to the full text) into
+  `~/.openhands/memory/MEMORY.md`. That is what every new conversation, in every project, will
+  actually receive.
 - **Per-project enforcement is `AGENTS.md` (layer 2).** Copy `templates/AGENTS.md` into each
   project so the standard is present there too, with the project's own specifics.
 - **The canonical repository is the source of truth** for the full text, and the place account
@@ -163,9 +168,21 @@ Verify with `GET /api/v1/settings` → `agent_settings.agent_context.load_projec
   mechanism, and will work if a future deployment starts injecting account skills. Do not rely on
   it alone.
 
-Account memory is written through the OpenHands **settings UI (Memory)**. The public settings API
-accepts a `memory_context` value with HTTP 200 but does **not** persist it, so this is a
-one-time manual paste, not something a script can do.
+### How the memory file is written
+
+There is **no "Memory" text box in the settings UI** — the Memory section holds only a
+"Persistent memory" toggle. The memory is a file, `~/.openhands/memory/MEMORY.md`, read from disk
+at session start. Two consequences:
+
+1. The public settings API accepts a `memory_context` value with HTTP 200 but **silently ignores
+   it** (verified: value unchanged after the POST). `POST /api/v1/settings` persists the
+   `load_memory` flag and skills, not the memory text.
+2. A `MemoryChangeCallbackProcessor` detects `MEMORY.md` writes made through the **`file_editor`
+   tool** and persists the new content to your account record. A plain shell `cp`/`echo` does
+   **not** trigger it. So: edit the file with `file_editor`, not `bash`.
+
+`sync-design-standard.py --install-memory` appends the block; you then touch the file with
+`file_editor` once to persist it.
 
 **Never store credentials, API keys, or private tokens in any of these layers.**
 

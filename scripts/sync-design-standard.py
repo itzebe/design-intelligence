@@ -3,11 +3,15 @@
 
 Verified behaviour of this OpenHands deployment (measured, not assumed):
 
-  * Account **memory**  -> injected into every new conversation, in every project. The public
-                           settings API does NOT persist `memory_context` (it answers HTTP 200 and
-                           ignores the field), so this layer is a MANUAL paste in the settings UI.
-                           This script prints the exact block to paste and checks whether it is
-                           already present.
+  * Account **memory**  -> the user memory file `~/.openhands/memory/MEMORY.md`, injected into
+                           every new conversation, in every project, as the <MEMORY_CONTEXT> block.
+                           It is populated FROM DISK: the settings UI has no memory text box (only
+                           a `load_memory` toggle), and the public settings API accepts a
+                           `memory_context` field with HTTP 200 but SILENTLY IGNORES it. To write
+                           it, edit the file with the `file_editor` tool - a MemoryChangeCallback
+                           Processor persists `MEMORY.md` edits made that way, while a plain shell
+                           write does not. Only the LAST ~100 lines (~3000 chars) of each tier reach
+                           the prompt, so the GDI block must sit at the END of MEMORY.md.
   * Account **skill**   -> stored durably via the settings API, but a *custom* account skill is NOT
                            auto-injected into new conversations here. Kept as a best-effort layer.
   * Project `AGENTS.md` -> injected into new conversations in that project. This is the per-project
@@ -24,7 +28,7 @@ No credentials are stored in this repository. The script reads from the environm
 Usage:
   python3 scripts/sync-design-standard.py                   # check + push what it can
   python3 scripts/sync-design-standard.py --check           # report only; change nothing
-  python3 scripts/sync-design-standard.py --print-memory    # print the block to paste into Memory
+  python3 scripts/sync-design-standard.py --print-memory    # print the block for MEMORY.md
 """
 from __future__ import annotations
 
@@ -44,7 +48,7 @@ CLOUD_HOST = os.environ.get("OPENHANDS_HOST", "https://app.all-hands.dev").rstri
 LOCAL_HOST = "http://localhost:60000"
 
 # A short, stable phrase that should appear in account memory once the block is pasted.
-MEMORY_MARKER = "Global Design Intelligence (applies to ALL UI work"
+MEMORY_MARKER = "Global Design Intelligence (GDI)"
 
 
 def read_constitution() -> str:
@@ -85,29 +89,43 @@ DESCRIPTION = (
 )
 
 
+MEMORY_FILE = pathlib.Path.home() / ".openhands" / "memory" / "MEMORY.md"
+
+
+def memory_block() -> str:
+    """Extract the fenced markdown block from ACCOUNT_MEMORY.md."""
+    text = (REPO_ROOT / "ACCOUNT_MEMORY.md").read_text(encoding="utf-8")
+    start = text.find("```markdown")
+    end = text.rfind("```")
+    if start == -1 or end <= start:
+        sys.exit("error: could not find the fenced markdown block in ACCOUNT_MEMORY.md")
+    return text[start + len("```markdown"):end].strip()
+
+
 def check_account_memory() -> bool:
-    """Report whether the standard is present in account memory; print the block if not."""
-    key = os.environ.get("OPENHANDS_API_KEY")
-    if not key:
-        print("[memory] OPENHANDS_API_KEY not set - cannot check account memory")
+    """Report whether the standard is present in the user memory file; print the block if not."""
+    if not MEMORY_FILE.exists():
+        print(f"[memory] {MEMORY_FILE} does not exist - the block has not been installed")
         return False
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    status, settings = request("GET", f"{CLOUD_HOST}/api/v1/settings", headers)
-    if status != 200:
-        print(f"[memory] GET settings failed: HTTP {status} {settings}")
-        return False
-    mem = settings.get("memory_context") or ""
+    mem = MEMORY_FILE.read_text(encoding="utf-8")
     present = MEMORY_MARKER in mem
+    tail_ok = MEMORY_MARKER in mem[-4000:]
     print(
-        f"[memory] account memory length={len(mem)} standard_present={present} "
-        f"(enable_memory_context={settings.get('enable_memory_context')})"
+        f"[memory] {MEMORY_FILE} length={len(mem)} standard_present={present} "
+        f"within_truncation_window={tail_ok}"
     )
     if not present:
         print(
-            "[memory] ACTION REQUIRED: paste the block from ACCOUNT_MEMORY.md into the OpenHands "
-            "settings UI (Memory). The API will not persist it for you."
+            "[memory] ACTION REQUIRED: append the block from ACCOUNT_MEMORY.md to the END of "
+            f"{MEMORY_FILE}, then touch the file with the `file_editor` tool so the change is "
+            "persisted to your account record. (The settings API cannot persist memory text.)"
         )
-    return present
+    elif not tail_ok:
+        print(
+            "[memory] WARNING: the standard is present but sits too high in the file - only the "
+            "last ~3000 chars are injected. Move the block to the very end."
+        )
+    return present and tail_ok
 
 
 def sync_account_skill(content: str, check: bool) -> bool:
@@ -175,15 +193,26 @@ def sync_local(content: str, check: bool) -> bool:
 
 
 def print_memory_block() -> int:
-    block = REPO_ROOT / "ACCOUNT_MEMORY.md"
-    if not block.exists():
-        sys.exit(f"error: {block} not found")
-    text = block.read_text(encoding="utf-8")
-    start = text.find("```markdown")
-    end = text.rfind("```")
-    if start == -1 or end <= start:
-        sys.exit("error: could not find the fenced markdown block in ACCOUNT_MEMORY.md")
-    print(text[start + len("```markdown"): end].strip())
+    print(memory_block())
+    return 0
+
+
+def install_memory_block() -> int:
+    """Append the block to the END of the user memory file (idempotent)."""
+    block = memory_block()
+    MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    existing = MEMORY_FILE.read_text(encoding="utf-8") if MEMORY_FILE.exists() else ""
+    if MEMORY_MARKER in existing:
+        print(f"[memory] block already present in {MEMORY_FILE}; nothing to do")
+        return 0
+    updated = existing.rstrip() + "\n\n" + block + "\n"
+    MEMORY_FILE.write_text(updated, encoding="utf-8")
+    print(
+        f"[memory] appended block to {MEMORY_FILE} (now {len(updated)} chars).\n"
+        "         IMPORTANT: touch the file with the `file_editor` tool in an OpenHands "
+        "conversation so the change is persisted to your account record - a plain shell write "
+        "is not detected."
+    )
     return 0
 
 
@@ -191,10 +220,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="report only; change nothing")
     ap.add_argument("--print-memory", action="store_true", help="print the account-memory block")
+    ap.add_argument("--install-memory", action="store_true", help="append the block to the user memory file")
     args = ap.parse_args()
 
     if args.print_memory:
         return print_memory_block()
+    if args.install_memory:
+        return install_memory_block()
 
     content = read_constitution()
     print(f"constitution: {len(content)} chars from {CONSTITUTION}")
