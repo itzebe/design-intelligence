@@ -1,7 +1,7 @@
 ---
 name: global-design-intelligence
 description: Standing design standard that applies to EVERY user interface you produce, modify, or review, on any project, in every conversation. Always active. Use for any web or app UI work - building, redesigning, styling, or reviewing pages, components, dashboards, landing pages, or design systems.
-version: 3.0.0
+version: 3.1.0
 ---
 
 # Global Design Intelligence
@@ -19,6 +19,14 @@ The full canonical standard is `DESIGN_CONSTITUTION.md` (source of truth), with
 `DESIGN_TOOLKIT.md` and `VISUAL_QA_CHECKLIST.md` as companions and `templates/` for project setup.
 Where you can retrieve them (the project repo, or the canonical remote repository), read them. This
 skill is the always-available summary; it must never contradict the constitution.
+
+## This standard is part of a pair
+
+Design is one half of the account standard. The other half is `ENGINEERING_CONSTITUTION.md`
+(architecture, implementation, security, performance, testing, delivery), and every task follows
+`DEVELOPMENT_WORKFLOW.md` (Discovery -> Requirements -> Design -> Implementation -> Verification ->
+Independent review -> Delivery). For any UI work, **both** constitutions apply. Project onboarding
+is defined by `templates/PROJECT_ONBOARDING.md`.
 
 ## The one rule that matters most
 

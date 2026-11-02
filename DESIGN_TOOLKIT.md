@@ -128,7 +128,7 @@ not assumed — the "Verified" column records what a real fresh conversation rec
 
 | # | Layer | Mechanism | Verified reaching a fresh conversation? |
 |---|-------|-----------|------------------------------------------|
-| 1 | **User memory file** | `~/.openhands/memory/MEMORY.md`, injected as the `<MEMORY_CONTEXT>` block | **Yes.** Verified in a fresh local conversation. **Caveat:** only the last ~100 lines (~3000 chars) of each tier are injected — older top content is dropped — so the block must be at the **end** of the file. |
+| 1 | **User memory file** | `~/.openhands/memory/MEMORY.md`, injected as the `<MEMORY_CONTEXT>` block | **Yes.** Verified in a fresh local conversation. **Caveat:** only the last ~100 lines (~3000 chars) of each tier are injected — older top content is dropped — so the block must be at the **end** of the file. **Note:** `$HOME` is ephemeral, but the account `memory_context` is the durable copy (see "How the memory file is written"). |
 | 2 | **Project `AGENTS.md`** | Repo-root `AGENTS.md`, injected as a context block | **Yes — when `load_project_skills` is on.** Verified: with the flag true, the repo's `AGENTS.md` appeared as an `agents` block in a new conversation; with it off, nothing was injected. |
 | 3 | **Project skills** | `.agents/skills/<name>.md` (flat file) in the repo | **Yes — same flag.** Verified: appeared as a `<name>` block. (Directory form `.agents/skills/<name>/SKILL.md` was discovered but did not reach the prompt — prefer the flat file.) |
 | 4 | **Account skill** | A custom skill in the account agent context | **No — in this deployment.** Verified negative: a custom account skill stored in `agent_settings.agent_context.skills` was **not** merged into a GUI-launched session or a freshly API-launched cloud conversation. Public catalogue skills *are* loaded automatically; custom account skills are not. |
@@ -148,10 +148,29 @@ POST https://app.all-hands.dev/api/v1/settings
 Authorization: Bearer $OPENHANDS_API_KEY
 {"agent_settings_diff": {"agent_context": {"load_project_skills": true,
                                            "load_user_skills": true,
-                                           "load_memory": true}}}
+                                           "load_memory": true,
+                                           "load_public_skills": true}}}
 ```
 
 Verify with `GET /api/v1/settings` → `agent_settings.agent_context.load_project_skills == true`.
+
+### The public skills catalogue is a working layer (verified 2026-11-02)
+
+Setting `load_public_skills: true` makes **every** skill in `github.com/OpenHands/extensions`
+available for model invocation in new conversations — confirmed by the skills present in a fresh
+session (`frontend-design`, `code-review`, `security`, `qa-changes`, `agent-memory`,
+`code-simplifier`, `prd`, `skill-creator`, `github`, and the onboarding plugin skills among them).
+This is the durable, API-configurable skill layer: unlike a custom account skill, it needs no
+manual step and is not deployment-dependent. It is now **on** for this account.
+
+### MCP servers are a working layer (verified 2026-11-02)
+
+`agent_settings.mcp_config` persists through the settings API and is **propagated into new
+conversations** — verified end-to-end by launching a conversation and reading back its resolved
+`agent.mcp_config`. Servers are also writable per key on a local agent server at
+`POST /api/settings/mcp/{name}`. Configured and verified here: `playwright`, `context7`, `shadcn`.
+`figma` is deliberately **not** configured — it requires a `FIGMA_API_KEY` credential, so it stays
+off until one is supplied. `sync-design-standard.py` writes this map.
 
 ### What this means in practice
 
@@ -179,7 +198,11 @@ at session start. Two consequences:
    `load_memory` flag and skills, not the memory text.
 2. A `MemoryChangeCallbackProcessor` detects `MEMORY.md` writes made through the **`file_editor`
    tool** and persists the new content to your account record. A plain shell `cp`/`echo` does
-   **not** trigger it. So: edit the file with `file_editor`, not `bash`.
+   **not** trigger it. So: edit the file with `file_editor`, not `bash`. **Verified 2026-11-02:**
+   after a `file_editor` edit of `~/.openhands/memory/MEMORY.md`, `GET /api/v1/settings` returned
+   the updated `memory_context` (length grew 72,312 → 75,614 chars and contained the appended
+   block). That makes the account record the durable copy — the ephemeral local `$HOME` file can be
+   rebuilt from it at any time.
 
 `sync-design-standard.py --install-memory` appends the block; you then touch the file with
 `file_editor` once to persist it.

@@ -4,7 +4,7 @@
 > under this account. This document is the single source of truth. Skills, templates, and
 > project briefs must not contradict it; where they are silent, this document governs.
 >
-> **Version:** 1.0.0 · **Status:** Active · **Applies to:** all projects, all conversations,
+> **Version:** 1.1.0 · **Status:** Active · **Applies to:** all projects, all conversations,
 > all agents. A one-line CSS tweak is covered exactly as much as a full redesign.
 
 ---
@@ -19,6 +19,10 @@
    non-negotiable.
 4. When this constitution and a project instruction disagree on a *mandatory* item, this
    constitution wins. When they disagree on *taste*, the project's existing identity wins.
+5. This document governs design. It does not replace the **`ENGINEERING_CONSTITUTION.md`**, which
+   governs architecture, security, testing, and delivery and applies to the same work. Where both
+   apply (any UI work), both are in force. Every task also follows **`DEVELOPMENT_WORKFLOW.md`**.
+   Project onboarding is defined by **`templates/PROJECT_ONBOARDING.md`**.
 
 The objective is to create products that feel deliberately designed, not merely generated.
 

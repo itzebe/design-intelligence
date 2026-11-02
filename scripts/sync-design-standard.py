@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Distribute the canonical design standard to the layers that actually persist.
+"""Distribute the canonical engineering + design standards to the layers that actually persist.
 
 Verified behaviour of this OpenHands deployment (measured, not assumed):
 
@@ -7,13 +7,22 @@ Verified behaviour of this OpenHands deployment (measured, not assumed):
                            every new conversation, in every project, as the <MEMORY_CONTEXT> block.
                            It is populated FROM DISK: the settings UI has no memory text box (only
                            a `load_memory` toggle), and the public settings API accepts a
-                           `memory_context` field with HTTP 200 but SILENTLY IGNORES it. To write
-                           it, edit the file with the `file_editor` tool - a MemoryChangeCallback
-                           Processor persists `MEMORY.md` edits made that way, while a plain shell
-                           write does not. Only the LAST ~100 lines (~3000 chars) of each tier reach
-                           the prompt, so the GDI block must sit at the END of MEMORY.md.
+                           `memory_context` field with HTTP 200 but SILENTLY IGNORES it (re-verified
+                           2026-11-02: POST returns "Settings stored" and the value is unchanged).
+                           To write it, edit the file with the `file_editor` tool - a
+                           MemoryChangeCallbackProcessor persists `MEMORY.md` edits made that way,
+                           while a plain shell write does not. Only the LAST ~100 lines (~3000
+                           chars) of each tier reach the prompt, so the block must sit at the END
+                           of MEMORY.md.
   * Account **skill**   -> stored durably via the settings API, but a *custom* account skill is NOT
                            auto-injected into new conversations here. Kept as a best-effort layer.
+  * **Public skills**   -> setting `load_public_skills: true` via the settings API DOES load the
+                           whole `github.com/OpenHands/extensions` catalogue into new conversations
+                           (verified 2026-11-02). This is the working, durable skill layer.
+  * **MCP servers**     -> `agent_settings.mcp_config` persists via the settings API and is
+                           propagated into new conversations (verified 2026-11-02). Servers are
+                           also writable per-key on a local agent server at
+                           `POST /api/settings/mcp/{name}`.
   * Project `AGENTS.md` -> injected into new conversations in that project. This is the per-project
                            enforcement layer (copy `templates/AGENTS.md` into each repo).
   * Project skill file  -> `.agents/skills/<name>.md` (flat) is injected; the directory form
@@ -29,6 +38,7 @@ Usage:
   python3 scripts/sync-design-standard.py                   # check + push what it can
   python3 scripts/sync-design-standard.py --check           # report only; change nothing
   python3 scripts/sync-design-standard.py --print-memory    # print the block for MEMORY.md
+  python3 scripts/sync-design-standard.py --install-memory  # append the block to MEMORY.md
 """
 from __future__ import annotations
 
@@ -42,19 +52,56 @@ import urllib.request
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONSTITUTION = REPO_ROOT / "DESIGN_CONSTITUTION.md"
+ENGINEERING_CONSTITUTION = REPO_ROOT / "ENGINEERING_CONSTITUTION.md"
+WORKFLOW = REPO_ROOT / "DEVELOPMENT_WORKFLOW.md"
 SKILL_NAME = "global-design-intelligence"
+ENGINEERING_SKILL_NAME = "global-engineering-intelligence"
 
 CLOUD_HOST = os.environ.get("OPENHANDS_HOST", "https://app.all-hands.dev").rstrip("/")
 LOCAL_HOST = "http://localhost:60000"
 
 # A short, stable phrase that should appear in account memory once the block is pasted.
-MEMORY_MARKER = "Global Design Intelligence (GDI)"
+MEMORY_MARKER = "Account Engineering & Design Standards"
+
+# MCP servers verified working in this deployment (2026-11-02). Figma is intentionally absent:
+# it requires a FIGMA_API_KEY credential, so it stays unconfigured until one is available.
+MCP_SERVERS = {
+    "playwright": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest"],
+        "description": "Headless browser automation and screenshots (UI visual QA)",
+    },
+    "context7": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@upstash/context7-mcp@latest"],
+        "description": "Up-to-date library and framework documentation",
+    },
+    "shadcn": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "shadcn@latest", "mcp"],
+        "description": "shadcn/ui component registry",
+    },
+}
 
 
 def read_constitution() -> str:
     if not CONSTITUTION.exists():
         sys.exit(f"error: {CONSTITUTION} not found")
     return CONSTITUTION.read_text(encoding="utf-8")
+
+
+def read_engineering_standard() -> str:
+    """The engineering skill is the engineering constitution plus the shared workflow."""
+    if not ENGINEERING_CONSTITUTION.exists():
+        sys.exit(f"error: {ENGINEERING_CONSTITUTION} not found")
+    parts = [ENGINEERING_CONSTITUTION.read_text(encoding="utf-8")]
+    if WORKFLOW.exists():
+        parts.append("\n\n---\n\n")
+        parts.append(WORKFLOW.read_text(encoding="utf-8"))
+    return "".join(parts)
 
 
 def request(method: str, url: str, headers: dict, body: dict | None = None):
@@ -70,9 +117,9 @@ def request(method: str, url: str, headers: dict, body: dict | None = None):
         return 0, {"error": str(e)}
 
 
-def skill_payload(content: str, description: str) -> dict:
+def skill_payload(content: str, description: str, name: str = SKILL_NAME) -> dict:
     return {
-        "name": SKILL_NAME,
+        "name": name,
         "content": content,
         "version": "1.0.0",
         "description": description,
@@ -86,6 +133,12 @@ DESCRIPTION = (
     "Standing design standard that applies to EVERY user interface you produce, modify, or review, "
     "on any project, in every conversation. Use for any web or app UI work - building, redesigning, "
     "styling, or reviewing pages, components, dashboards, landing pages, or design systems."
+)
+
+ENGINEERING_DESCRIPTION = (
+    "Standing engineering standard that applies to EVERY code change, on any project, in every "
+    "conversation. Use for any implementation, bug fix, refactor, review, or delivery task: "
+    "architecture, security, performance, testing, and evidence-based completion reporting."
 )
 
 
@@ -129,7 +182,11 @@ def check_account_memory() -> bool:
 
 
 def sync_account_skill(content: str, check: bool) -> bool:
-    """Store the standard as an account skill (best-effort: not auto-injected in this deployment)."""
+    """Store the standards as account skills (best-effort: not auto-injected in this deployment).
+
+    Also enables the public skills catalogue, which IS loaded into new conversations here, and
+    writes the verified MCP server map.
+    """
     key = os.environ.get("OPENHANDS_API_KEY")
     if not key:
         print("[skill] OPENHANDS_API_KEY not set - skipping account skill layer")
@@ -141,22 +198,62 @@ def sync_account_skill(content: str, check: bool) -> bool:
         return False
     ac = (settings.get("agent_settings") or {}).get("agent_context") or {}
     have = {s.get("name"): s for s in (ac.get("skills") or [])}
-    same = have.get(SKILL_NAME, {}).get("content") == content
-    print(f"[skill] present={SKILL_NAME in have} content_matches={same}")
+    design_same = have.get(SKILL_NAME, {}).get("content") == content
+    eng_content = read_engineering_standard()
+    eng_same = have.get(ENGINEERING_SKILL_NAME, {}).get("content") == eng_content
+    public_on = bool(ac.get("load_public_skills"))
+    print(
+        f"[skill] design present={SKILL_NAME in have} matches={design_same} | "
+        f"engineering present={ENGINEERING_SKILL_NAME in have} matches={eng_same} | "
+        f"load_public_skills={public_on}"
+    )
     if check:
         return True
-    others = [s for s in (ac.get("skills") or []) if s.get("name") != SKILL_NAME]
+    others = [
+        s
+        for s in (ac.get("skills") or [])
+        if s.get("name") not in (SKILL_NAME, ENGINEERING_SKILL_NAME)
+    ]
     payload = {
         "agent_settings_diff": {
             "agent_context": {
-                "skills": others + [skill_payload(content, DESCRIPTION)],
+                "skills": others
+                + [
+                    skill_payload(content, DESCRIPTION, SKILL_NAME),
+                    skill_payload(eng_content, ENGINEERING_DESCRIPTION, ENGINEERING_SKILL_NAME),
+                ],
                 "load_user_skills": True,
                 "load_project_skills": True,
+                "load_public_skills": True,
             }
         }
     }
     status, out = request("POST", f"{CLOUD_HOST}/api/v1/settings", headers, payload)
     print(f"[skill] POST settings -> HTTP {status} {json.dumps(out)[:200]}")
+    return status in (200, 201)
+
+
+def sync_mcp(check: bool) -> bool:
+    """Write the verified MCP server map to the cloud agent settings (durable)."""
+    key = os.environ.get("OPENHANDS_API_KEY")
+    if not key:
+        print("[mcp] OPENHANDS_API_KEY not set - skipping MCP layer")
+        return False
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    status, settings = request("GET", f"{CLOUD_HOST}/api/v1/settings", headers)
+    if status != 200:
+        print(f"[mcp] GET settings failed: HTTP {status}")
+        return False
+    current = (settings.get("agent_settings") or {}).get("mcp_config") or {}
+    print(f"[mcp] configured servers: {sorted(current.keys())}")
+    if check:
+        return True
+    merged = dict(current)
+    merged.update(MCP_SERVERS)
+    status, out = request(
+        "POST", f"{CLOUD_HOST}/api/v1/settings", headers, {"agent_settings_diff": {"mcp_config": merged}}
+    )
+    print(f"[mcp] POST settings -> HTTP {status} {json.dumps(out)[:200]}")
     return status in (200, 201)
 
 
@@ -177,11 +274,19 @@ def sync_local(content: str, check: bool) -> bool:
     )
     if check:
         return True
-    others = [s for s in (ac.get("skills") or []) if s.get("name") != SKILL_NAME]
+    others = [
+        s
+        for s in (ac.get("skills") or [])
+        if s.get("name") not in (SKILL_NAME, ENGINEERING_SKILL_NAME)
+    ]
     payload = {
         "agent_settings_diff": {
             "agent_context": {
-                "skills": others + [skill_payload(content, DESCRIPTION)],
+                "skills": others
+                + [
+                    skill_payload(content, DESCRIPTION, SKILL_NAME),
+                    skill_payload(read_engineering_standard(), ENGINEERING_DESCRIPTION, ENGINEERING_SKILL_NAME),
+                ],
                 "load_user_skills": True,
                 "load_project_skills": True,
             }
@@ -189,7 +294,16 @@ def sync_local(content: str, check: bool) -> bool:
     }
     status, out = request("PATCH", f"{LOCAL_HOST}/api/settings", headers, payload)
     print(f"[local] PATCH settings -> HTTP {status} {json.dumps(out)[:200]}")
-    return status in (200, 201)
+    # MCP servers are per-server endpoints on the local agent server.
+    # 409 means the server is already configured - that is success, not failure.
+    mcp_ok = True
+    for name, spec in MCP_SERVERS.items():
+        body = dict(spec)
+        body.pop("type", None)
+        s2, o2 = request("POST", f"{LOCAL_HOST}/api/settings/mcp/{name}", headers, body)
+        print(f"[local-mcp] {name} -> HTTP {s2}" + (" (already configured)" if s2 == 409 else ""))
+        mcp_ok = mcp_ok and s2 in (200, 201, 409)
+    return status in (200, 201) and mcp_ok
 
 
 def print_memory_block() -> int:
@@ -230,14 +344,17 @@ def main() -> int:
 
     content = read_constitution()
     print(f"constitution: {len(content)} chars from {CONSTITUTION}")
+    print(f"engineering:  {len(read_engineering_standard())} chars (constitution + workflow)")
     mem_ok = check_account_memory()
     skill_ok = sync_account_skill(content, args.check)
+    mcp_ok = sync_mcp(args.check)
     local_ok = sync_local(content, args.check)
     print(
-        "done: account_memory=%s account_skill=%s local=%s"
+        "done: account_memory=%s account_skill=%s mcp=%s local=%s"
         % (
-            "present" if mem_ok else "MISSING (manual paste required)",
+            "present" if mem_ok else "MISSING (manual edit required)",
             "ok" if skill_ok else "skipped/failed",
+            "ok" if mcp_ok else "skipped/failed",
             "ok" if local_ok else "skipped/failed",
         )
     )

@@ -1,63 +1,99 @@
-# AGENTS.md — design intelligence for this repository
+# AGENTS.md — account standards for this repository
 
-> **Template.** Copy this file to a project's repository root as `AGENTS.md` (or merge its
-> content into an existing `AGENTS.md` without deleting that file's other instructions). Replace
-> every `<PLACEHOLDER>`.
+> **Template.** Copy this file to a project's repository root as `AGENTS.md`. If an `AGENTS.md`
+> already exists, **merge** this content into it — do not delete the file's existing
+> instructions. Replace every `<PLACEHOLDER>`.
 
-This repository follows the **Design Constitution**, a canonical, account-wide standard for every
-user interface produced, modified, or reviewed here. It is mandatory, not advisory, and applies to
-a one-line CSS change as much as to a full redesign.
+This repository follows the **account-wide engineering and design standards**. They are
+mandatory, not advisory, and apply to a one-line fix as much as to a full feature.
 
-## 1. Load the constitution first
+The three canonical standards:
 
-Before writing or changing any UI code, load the constitution and the two companions:
+1. `ENGINEERING_CONSTITUTION.md` — how software is built, secured, tested, and delivered.
+2. `DESIGN_CONSTITUTION.md` — how interfaces are designed, built, and verified.
+3. `DEVELOPMENT_WORKFLOW.md` — the seven-step workflow every task follows.
 
-1. `DESIGN_CONSTITUTION.md` — the canonical standard (source of truth).
-2. `DESIGN_TOOLKIT.md` — tools and when to use them.
-3. `VISUAL_QA_CHECKLIST.md` — the pre-report checklist.
+Canonical source repository: `<CANONICAL_REPO_URL>` (e.g.
+`https://raw.githubusercontent.com/itzebe/design-intelligence/main/`).
+
+---
+
+## 1. Load the standards first
+
+Before writing or changing any code, load the standards you need:
+
+- Always: `ENGINEERING_CONSTITUTION.md` and `DEVELOPMENT_WORKFLOW.md`.
+- For any UI work: also `DESIGN_CONSTITUTION.md`, `DESIGN_TOOLKIT.md`, and
+  `VISUAL_QA_CHECKLIST.md`.
 
 Retrieval order (use the first that works):
 
-1. **Account memory** — the short core of the standard is already in your context as a
-   `<MEMORY_CONTEXT>` block (the "Global Design Intelligence" section). It applies here. This is
-   the layer that reaches every conversation; you do not need to fetch it.
-2. **Local copy in this repository** — if `DESIGN_CONSTITUTION.md` exists here, read it for the
-   full text.
-3. **Canonical remote source** — otherwise fetch it from the canonical repository:
-   `<CANONICAL_REPO_URL>` (a raw GitHub URL to `DESIGN_CONSTITUTION.md`).
+1. **Account memory** — the short core of both standards is already in your context as the
+   `<MEMORY_CONTEXT>` block. It applies here; you do not need to fetch it.
+2. **Local copy in this repository** — if these files exist here, read them for the full text.
+3. **Canonical remote source** — otherwise fetch them from `<CANONICAL_REPO_URL>`.
 
-If the full text is unreachable, follow the account-memory summary above and **say plainly** that
-the full constitution could not be retrieved.
+If the full text is unreachable, follow the account-memory summary and **say plainly** that the
+full text could not be retrieved.
 
-## 2. Then follow the project-init workflow
+## 2. Follow the development workflow
 
-Use `templates/PROJECT_INIT.md` (in the canonical repository) to start or redesign a project:
-understand the product, create this project's `DESIGN_BRIEF.md`, define a distinct direction,
-implement without unnecessary rewrites, inspect the rendered interface, fix defects, and report.
+Every task follows `DEVELOPMENT_WORKFLOW.md`:
 
-## 3. This project's specifics
+**Discovery → Requirements → Design → Implementation → Verification → Independent review → Delivery.**
+
+The steps are constant; their weight scales with the task. **Verification (step 5) and
+Independent review (step 6) are never skipped.**
+
+## 3. Onboard this project if it is not yet onboarded
+
+If this repository has not been onboarded to the standards, follow
+`templates/PROJECT_ONBOARDING.md` (in the canonical repository) before implementing. It inspects
+the project, merges these instructions, and records the project's specifics — **without
+overwriting existing project instructions**.
+
+## 4. This project's specifics
 
 - **Product:** `<what it is, in one sentence>`
 - **Primary audience:** `<who uses it>`
-- **Existing identity to preserve:** `<brand colours / type / conventions, or "none yet">`
-- **Project `DESIGN_BRIEF.md`:** `<path, or "to be created">`
+- **Stack:** `<language / framework / runtime>`
 - **How to run the app locally:** `<command and URL>`
 - **How to run the tests:** `<command>`
+- **Type check / lint / build:** `<commands>`
+- **Existing identity to preserve:** `<brand colours / type / conventions, or "none yet">`
+- **Project `DESIGN_BRIEF.md`:** `<path, or "to be created">`
 
-## 4. Non-negotiables (summary — the constitution governs)
+## 5. Non-negotiables (summary — the constitutions govern)
 
-- Generic is a failure state. Rework anything that could be a default template with a swapped logo.
-- WCAG 2.2 AA is the minimum; verify contrast and keyboard access rather than assuming.
-- Define all interaction states: default, hover, focus-visible, active, disabled, loading, empty,
-  error, success, and content extremes.
-- Verify responsive behaviour at mobile, tablet, and desktop; reflow, don't just shrink.
+### Engineering
+- **Never report work as done that you have not verified.** Run the checks; report the exact
+  commands and results.
+- **No fake functionality** — no dead buttons, no stubbed handlers, no fake success states, no
+  fabricated production data.
+- **Preserve existing working features.** Do not regress behaviour outside the scope.
+- **Security by default** — least privilege, validate untrusted input at the boundary, check
+  authorization at the object level, never expose secrets.
+- **Keep changes focused.** One concern per change; no drive-by refactors.
+- **Independent review before delivery** — review your own change as a separate senior engineer.
+
+### Design (any UI work)
+- **Generic is a failure state.** Rework anything that could be a default template with a swapped
+  logo.
+- **WCAG 2.2 AA is the minimum**; verify contrast and keyboard access rather than assuming.
+- **Define all interaction states**: default, hover, focus-visible, active, disabled, loading,
+  empty, error, success, and content extremes.
+- **Verify responsive behaviour** at mobile, tablet, and desktop; reflow, do not just shrink.
 - **Actually look at the rendered interface in a browser** and take a screenshot. If you cannot,
   say so; never claim visual verification you did not perform.
-- No fabricated content; no unnecessary dependencies; do not touch unrelated functionality.
-- Preserve this project's own visual identity — the constitution sets the quality bar, not a
+- **Preserve this project's own visual identity** — the constitution sets the quality bar, not a
   shared house style.
 
-## 5. Memory
+### Delivery
+- Do not commit, push, merge, deploy, or release unless the task authorises it and verification
+  has passed. Never push directly to `main`/`master`.
 
-Record durable, non-obvious design decisions and constraints in project memory
-(`.openhands/memory/`). Do not record secrets, and do not record trivially re-discoverable facts.
+## 6. Memory
+
+Record durable, non-obvious decisions and constraints in project memory
+(`.openhands/memory/`): the constraint, the decision, and the reason. Do not record secrets, and
+do not record trivially re-discoverable facts.
